@@ -435,9 +435,15 @@
     color:var(--ink-soft); display:flex; align-items:center; gap:3px;
   }
   .comment-count-badge:hover{ background:var(--paper-deep); opacity:1; }
+  .read-btn{
     background:var(--ink); color:#fdfbf5; border:none; border-radius:10px;
     padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer;
   }
+  .join-btn{
+    background:var(--thread); color:#fff; border:none; border-radius:10px;
+    padding:7px 14px; font-size:13px; font-weight:600; cursor:pointer;
+  }
+  .join-btn:hover, .read-btn:hover{ opacity:0.88; }
 
   /* ---------- 공개/비공개 선택 모달 ---------- */
   #publishModal{
@@ -694,6 +700,7 @@
         <div id="overflowMenu" class="overflow-menu" style="display:none;">
           <button id="statsBtn">📊 통계</button>
           <button id="finalizeBtn">🏁 완결 제안</button>
+          <button id="overflowPublicBtn" style="display:none;">🌍 공개하기</button>
           <button id="deleteRoomBtn" style="display:none; color:var(--danger);">🗑 방 삭제</button>
         </div>
       </div>
@@ -909,6 +916,7 @@ const newEntryToastEl = $('newEntryToast');
 const toastEl = $('toast');
 const overflowBtn = $('overflowBtn');
 const overflowMenu = $('overflowMenu');
+const overflowPublicBtn = $('overflowPublicBtn');
 const deleteRoomBtn = $('deleteRoomBtn');
 overflowBtn.addEventListener('click', (e) => {
   e.stopPropagation();
@@ -1246,12 +1254,13 @@ function enterRoom(code){
     currentRoomCreatedBy = creator;
     const isCreator = currentNickname === creator;
     deleteRoomBtn.style.display = (isCreator || isAdmin) ? 'block' : 'none';
+    if(isCreator || isAdmin) updateOverflowPublicBtn();
     if(completedOnEntry && isCreator){ renderVisibilityBar(); }
   });
-  // 방코드 자체가 public_stories 키 — 존재 여부만 확인
   db.ref('public_stories/' + code).once('value').then(s => {
     currentPublicStoryKey = s.exists() ? code : null;
     if(visibilityBar.style.display !== 'none'){ renderVisibilityBar(); }
+    updateOverflowPublicBtn();
   });
 
   // 접속자 등록 (onDisconnect로 자동 제거)
@@ -1388,6 +1397,7 @@ function leaveRoom(){
   deleteRoomBtn.style.display = 'none';
   deleteRoomBtn.disabled = false;
   deleteRoomBtn.textContent = '🗑 방 삭제';
+  overflowPublicBtn.style.display = 'none';
   notifications = [];
   unreadNotifCount = 0;
   prevEntriesSnapshot = {};
@@ -1950,9 +1960,16 @@ function renderPublicStories(){
   const medals = ['🥇','🥈','🥉'];
   html += '<div class="story-grid">';
   publicStoriesCache.forEach((s,i) => {
+    const isOngoing = !s.isCompleted && s.status !== 'completed';
+    const statusBadge = isOngoing
+      ? '<span style="font-size:11px;font-weight:700;color:#E07A1A;background:rgba(224,122,26,0.1);border-radius:999px;padding:2px 8px;">🔥 연재 중</span>'
+      : '<span style="font-size:11px;font-weight:700;color:var(--thread);background:rgba(79,111,82,0.1);border-radius:999px;padding:2px 8px;">✨ 완결</span>';
     html += `<div class="story-card">
       ${i<3 ? `<div class="story-rank-badge">${medals[i]}</div>` : ''}
-      <div class="story-card-title">${escG(s.title)}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <div class="story-card-title">${escG(s.title)}</div>
+        ${statusBadge}
+      </div>
       <div class="story-card-meta">${(s.authors||[]).map(escG).join(', ')}</div>
       ${s.topics&&s.topics.length ? `<div class="story-card-topics">${s.topics.map(t=>`<span class="topic-mini">${escG(t)}</span>`).join('')}</div>` : ''}
       <div class="story-card-footer">
@@ -1960,7 +1977,10 @@ function renderPublicStories(){
           <button class="like-btn ${liked[s.key]?'liked':''}" data-key="${s.key}">👍 ${s.thumbsUp !== undefined ? s.thumbsUp : 0}</button>
           <button class="comment-count-badge read-btn" data-key="${s.key}">💬 ${s.commentCount||0}</button>
         </div>
-        <button class="read-btn" data-key="${s.key}">전체 읽기</button>
+        <div style="display:flex;gap:8px;">
+          ${isOngoing ? `<button class="join-btn" data-key="${s.key}">✍️ 참여하기</button>` : ''}
+          <button class="read-btn" data-key="${s.key}">전체 읽기</button>
+        </div>
       </div>
     </div>`;
   });
@@ -1968,6 +1988,7 @@ function renderPublicStories(){
   publicSection.innerHTML = html;
   publicSection.querySelectorAll('.like-btn').forEach(btn => btn.addEventListener('click', () => thumbsUpStory(btn.dataset.key)));
   publicSection.querySelectorAll('.read-btn, .gold-read').forEach(btn => btn.addEventListener('click', () => openStoryReader(btn.dataset.key)));
+  publicSection.querySelectorAll('.join-btn').forEach(btn => btn.addEventListener('click', () => joinFromGallery(btn.dataset.key)));
 }
 
 async function thumbsUpStory(storyKey){
@@ -2176,6 +2197,64 @@ notifBtn.addEventListener('click', () => {
 });
 notifCloseBtn.addEventListener('click', () => { notifOverlay.style.display = 'none'; });
 notifOverlay.addEventListener('click', (e) => { if(e.target === notifOverlay) notifOverlay.style.display = 'none'; });
+
+/* ---------- ⋯ 메뉴 공개 버튼 ---------- */
+function updateOverflowPublicBtn(){
+  const isCreator = currentNickname === currentRoomCreatedBy;
+  if(!isCreator && !isAdmin){ overflowPublicBtn.style.display = 'none'; return; }
+  overflowPublicBtn.style.display = 'block';
+  overflowPublicBtn.textContent = currentPublicStoryKey ? '🔒 비공개로 전환' : '🌍 공개하기';
+}
+
+overflowPublicBtn.addEventListener('click', async () => {
+  overflowMenu.style.display = 'none';
+  overflowPublicBtn.disabled = true;
+  try{
+    if(currentPublicStoryKey){
+      await removeAllPublicByRoom(currentRoom);
+      currentPublicStoryKey = null;
+      showToast('✓ 비공개로 전환됐어요');
+    }else{
+      const snap = await db.ref('rooms/'+currentRoom+'/entries').once('value');
+      const val = snap.val() || {};
+      const entryCount = Object.values(val).filter(e=>e.type!=='chapter').length;
+      const isCompleted = !!(finalizeData && finalizeData.status === 'completed');
+      await removeAllPublicByRoom(currentRoom);
+      await db.ref('public_stories/'+currentRoom).set({
+        roomCode: currentRoom, title: titleInput.value||'(제목 없음)',
+        publishedAt: firebase.database.ServerValue.TIMESTAMP,
+        weekKey: getWeekKey(), topics: currentTopicKeywords,
+        authors: getAuthors(), entryCount, thumbsUp: 0,
+        publishedBy: currentNickname,
+        isCompleted, status: isCompleted ? 'completed' : 'ongoing'
+      });
+      currentPublicStoryKey = currentRoom;
+      showToast('✓ 공개됐어요!');
+    }
+    updateOverflowPublicBtn();
+    renderVisibilityBar();
+  }catch(e){ showToast('실패했어요: '+e.message); }
+  finally{ overflowPublicBtn.disabled = false; }
+});
+
+/* ---------- 갤러리에서 연재중 방 참여하기 ---------- */
+async function joinFromGallery(storyKey){
+  const s = publicStoriesCache.find(x=>x.key===storyKey);
+  if(!s) return;
+  const roomCode = s.roomCode;
+  pendingCode = roomCode;
+  pendingIsNew = false;
+  pendingTopic = null;
+  const savedNick = getNickname(roomCode);
+  if(savedNick){
+    currentNickname = savedNick;
+    finalizeEnterRoom();
+  }else{
+    gateNicknameInput.value = '';
+    showScreen('nickname');
+    setTimeout(()=>gateNicknameInput.focus(), 50);
+  }
+}
 
 /* ---------- 완결 (이하 기존 코드) ---------- */
 function getAuthors(){
