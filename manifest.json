@@ -1,0 +1,25 @@
+{
+  "name": "릴레이 소설",
+  "short_name": "릴레이소설",
+  "description": "순서 없이, 누구나 이어쓰는 이야기",
+  "start_url": "/relay-novel/",
+  "scope": "/relay-novel/",
+  "display": "standalone",
+  "background_color": "#F1ECDD",
+  "theme_color": "#262244",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
