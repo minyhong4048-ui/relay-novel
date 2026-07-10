@@ -6,6 +6,13 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#262244">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="릴레이소설">
+<link rel="apple-touch-icon" href="icon-192.png">
 <title>릴레이 소설</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&family=Gowun+Dodum&display=swap" rel="stylesheet">
@@ -2669,6 +2676,15 @@ function init(){
   }
 }
 init();
+
+// PWA 서비스 워커 등록
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/relay-novel/sw.js')
+      .then(reg => console.log('SW 등록됨:', reg.scope))
+      .catch(err => console.log('SW 등록 실패:', err));
+  });
+}
 </script>
 </body>
 </html>
