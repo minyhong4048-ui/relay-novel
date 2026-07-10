@@ -1791,6 +1791,7 @@ visibilityToggleBtn.addEventListener('click', async () => {
 });
 
 /* ---------- 공지 ---------- */
+const NOTICE_ADMIN_PW = 'relay2026';
 const READER_ANIMALS = ['🦊','🐧','🐨','🦁','🐸','🦋','🐬','🦄','🐺','🦝','🐙','🦉','🐳','🦔','🐲','🦜','🐝','🦋','🐯','🦭'];
 
 function getReaderIdentity(){
@@ -2589,11 +2590,15 @@ let titleSaveTimeout = null;
 titleInput.addEventListener('input', () => {
   clearTimeout(titleSaveTimeout);
   const value = titleInput.value;
-  titleSaveTimeout = setTimeout(() => {
+  titleSaveTimeout = setTimeout(async () => {
     titleRef.set(value).then(() => upsertRoom(currentRoom, value)).catch((e) => {
       console.error(e);
       showToast('제목 저장에 실패했어요: ' + e.message);
     });
+    // 공개 중인 방이면 갤러리 제목도 동기화
+    if(currentPublicStoryKey){
+      db.ref('public_stories/' + currentRoom + '/title').set(value || '(제목 없음)').catch(()=>{});
+    }
   }, 600);
 });
 
