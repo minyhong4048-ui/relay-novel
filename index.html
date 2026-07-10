@@ -497,9 +497,11 @@
     max-height:40vh; overflow-y:auto;
   }
   .reader-comments h4{ font-family:'Gaegu',cursive; font-size:17px; margin:0 0 12px; }
-  .pub-comment{ font-size:14px; line-height:1.6; padding:6px 0; border-bottom:1px solid var(--paper-deep); }
-  .pub-comment .pc-author{ font-weight:700; margin-right:4px; }
-  .pub-comment .pc-text{ color:var(--ink-soft); }
+  .pub-comment{ font-size:14px; line-height:1.6; padding:6px 0; border-bottom:1px solid var(--paper-deep); display:flex; align-items:baseline; gap:6px; }
+  .pub-comment .pc-author{ font-weight:700; margin-right:4px; flex-shrink:0; }
+  .pub-comment .pc-text{ color:var(--ink-soft); flex:1; }
+  .pc-del-btn{ background:none; border:none; color:#c0b8a8; font-size:11px; cursor:pointer; padding:0 2px; flex-shrink:0; }
+  .pc-del-btn:hover{ color:var(--danger); }
   .pub-comment-empty{ font-size:13px; color:#b6ad8e; padding:4px 0 10px; }
   .pub-comment-input{ display:flex; gap:8px; margin-top:10px; }
   .pub-comment-input input{ flex:1; font-size:13px; padding:8px 12px; border-radius:10px; }
@@ -2051,7 +2053,15 @@ async function openStoryReader(storyKey){
         <div id="rCommentList">
           ${comments.length === 0
             ? '<div class="pub-comment-empty">아직 댓글이 없어요. 첫 댓글을 남겨보세요!</div>'
-            : comments.map(c=>`<div class="pub-comment"><span class="pc-author">${escG(c.author||'익명')}</span><span class="pc-text">${escG(c.text)}</span></div>`).join('')
+            : comments.map(c=>{
+                const myNick = localStorage.getItem('relay-novel-public-nick') || currentNickname;
+                const canDel = isAdmin || c.author === myNick;
+                return `<div class="pub-comment" data-comment-key="${c.key}">
+                  <span class="pc-author">${escG(c.author||'익명')}</span>
+                  <span class="pc-text">${escG(c.text)}</span>
+                  ${canDel ? `<button class="pc-del-btn" data-key="${c.key}" title="삭제">✕</button>` : ''}
+                </div>`;
+              }).join('')
           }
         </div>
         <div class="pub-comment-input">
@@ -2071,15 +2081,16 @@ async function openStoryReader(storyKey){
     const rBtn = overlay.querySelector('#rCommentBtn');
     const rList = overlay.querySelector('#rCommentList');
     const submitPubComment = async () => {
+      if(rBtn.disabled) return;
+      rBtn.disabled = true;
       const text = rInput.value.trim();
-      if(!text) return;
+      if(!text){ rBtn.disabled = false; return; }
       let author = localStorage.getItem('relay-novel-public-nick');
       if(!author){
         author = prompt('댓글에 쓸 닉네임을 입력해주세요:');
-        if(!author) return;
+        if(!author){ rBtn.disabled = false; return; }
         localStorage.setItem('relay-novel-public-nick', author);
       }
-      rBtn.disabled = true;
       try{
         await db.ref('public_comments/'+storyKey).push({
           author, text, ts: firebase.database.ServerValue.TIMESTAMP
@@ -2089,7 +2100,16 @@ async function openStoryReader(storyKey){
         const newSnap = await db.ref('public_comments/'+storyKey).once('value');
         const newVal = newSnap.val() || {};
         const newComments = Object.keys(newVal).map(k=>({key:k,...newVal[k]})).sort((a,b)=>(a.ts||0)-(b.ts||0));
-        rList.innerHTML = newComments.map(c=>`<div class="pub-comment"><span class="pc-author">${escG(c.author||'익명')}</span><span class="pc-text"> ${escG(c.text)}</span></div>`).join('');
+        rList.innerHTML = newComments.map(c=>{
+          const myNick = localStorage.getItem('relay-novel-public-nick') || currentNickname;
+          const canDel = isAdmin || c.author === myNick;
+          return `<div class="pub-comment" data-comment-key="${c.key}">
+            <span class="pc-author">${escG(c.author||'익명')}</span>
+            <span class="pc-text"> ${escG(c.text)}</span>
+            ${canDel ? `<button class="pc-del-btn" data-key="${c.key}" title="삭제">✕</button>` : ''}
+          </div>`;
+        }).join('');
+        bindCommentDeleteBtns();
         // 카드 댓글 수 배지 업데이트
         const badge = publicSection.querySelector(`.comment-count-badge[data-key="${storyKey}"]`);
         if(badge) badge.textContent = '💬 ' + newComments.length;
@@ -2098,6 +2118,38 @@ async function openStoryReader(storyKey){
     };
     rBtn.addEventListener('click', submitPubComment);
     rInput.addEventListener('keydown', e=>{ if(e.key==='Enter') submitPubComment(); });
+
+    // 댓글 삭제
+    async function deleteComment(commentKey){
+      if(!confirm('댓글을 삭제할까요?')) return;
+      try{
+        await db.ref('public_comments/'+storyKey+'/'+commentKey).remove();
+        await db.ref('public_stories/'+storyKey+'/commentCount').transaction(c=>Math.max(0,(c||0)-1));
+        const newSnap = await db.ref('public_comments/'+storyKey).once('value');
+        const newVal = newSnap.val() || {};
+        const newComments = Object.keys(newVal).map(k=>({key:k,...newVal[k]})).sort((a,b)=>(a.ts||0)-(b.ts||0));
+        const myNick = localStorage.getItem('relay-novel-public-nick') || currentNickname;
+        rList.innerHTML = newComments.length === 0
+          ? '<div class="pub-comment-empty">아직 댓글이 없어요. 첫 댓글을 남겨보세요!</div>'
+          : newComments.map(c=>{
+              const canDel = isAdmin || c.author === myNick;
+              return `<div class="pub-comment" data-comment-key="${c.key}">
+                <span class="pc-author">${escG(c.author||'익명')}</span>
+                <span class="pc-text"> ${escG(c.text)}</span>
+                ${canDel ? `<button class="pc-del-btn" data-key="${c.key}" title="삭제">✕</button>` : ''}
+              </div>`;
+            }).join('');
+        bindCommentDeleteBtns();
+        showToast('✓ 댓글이 삭제됐어요');
+      }catch(e){ showToast('삭제에 실패했어요'); }
+    }
+
+    function bindCommentDeleteBtns(){
+      rList.querySelectorAll('.pc-del-btn').forEach(btn=>{
+        btn.addEventListener('click', ()=>deleteComment(btn.dataset.key));
+      });
+    }
+    bindCommentDeleteBtns();
 
   }catch(e){ showToast('불러오기에 실패했어요'); }
 }
