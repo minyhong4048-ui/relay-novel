@@ -426,7 +426,7 @@
   .like-btn{
     background:rgba(255,253,247,0.8); border:1.5px solid var(--paper-deep);
     border-radius:999px; padding:6px 14px; font-size:14px; cursor:pointer;
-    transition: all 0.15s;
+    transition: all 0.15s; color: var(--ink);
   }
   .like-btn.liked{ background:rgba(201,162,39,0.12); border-color:var(--gold); color:var(--gold); font-weight:700; }
   .comment-count-badge{
@@ -1975,7 +1975,7 @@ function renderPublicStories(){
       <div class="story-card-footer">
         <div style="display:flex;gap:8px;align-items:center;">
           <button class="like-btn ${liked[s.key]?'liked':''}" data-key="${s.key}">👍 ${s.thumbsUp !== undefined ? s.thumbsUp : 0}</button>
-          <button class="comment-count-badge read-btn" data-key="${s.key}">💬 ${s.commentCount||0}</button>
+          <button class="comment-count-badge" data-key="${s.key}">💬 ${s.commentCount||0}</button>
         </div>
         <div style="display:flex;gap:8px;">
           ${isOngoing ? `<button class="join-btn" data-key="${s.key}">✍️ 참여하기</button>` : ''}
