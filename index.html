@@ -128,7 +128,22 @@
   .keyword-chip:nth-child(2){ color:#5B7A99; }
   .keyword-chip:nth-child(3){ color:#B5687A; }
 
-  /* ---------- Main / Entry list ---------- */
+  .visibility-select-wrap{
+    margin-top:20px; padding-top:16px; border-top:1.5px dashed var(--paper-deep);
+  }
+  .visibility-select{
+    display:flex; gap:8px; margin-bottom:10px;
+  }
+  .vis-btn{
+    flex:1; background:var(--paper-deep); border:2px solid transparent;
+    border-radius:10px; padding:10px; font-size:14px; font-weight:600;
+    color:var(--ink-soft); cursor:pointer; transition:all 0.15s;
+  }
+  .vis-btn.active{
+    background:#fff; border-color:var(--thread); color:var(--ink);
+    box-shadow:0 2px 8px rgba(79,111,82,0.15);
+  }
+  .vis-hint{ font-size:12px; color:var(--ink-soft); text-align:center; }
   main{ flex:1; padding-bottom: 200px; }
   .title-row{ margin-bottom: 6px; }
   .title-input{
@@ -680,6 +695,13 @@
       <button class="ghost" id="rerollBtn">다시 뽑기</button>
       <button id="topicConfirm">이 주제로 시작하기</button>
     </div>
+    <div class="visibility-select-wrap">
+      <div class="visibility-select">
+        <button class="vis-btn" id="visPublicBtn">🌍 공개</button>
+        <button class="vis-btn active" id="visPrivateBtn">🔒 비공개</button>
+      </div>
+      <div class="vis-hint" id="visHint">비공개 — 방 코드를 아는 사람만 참여할 수 있어요.</div>
+    </div>
   </div>
 </div>
 
@@ -828,6 +850,7 @@ let entriesCache = [];
 let pendingCode = null;
 let pendingIsNew = false;
 let pendingTopic = null;
+let pendingVisibility = 'private';
 let reactedLocal = {};
 let isFirstLoad = true;
 let prevEntryCount = 0;
@@ -1143,6 +1166,9 @@ async function startJoin(rawCode){
       const kws = rollKeywords();
       renderKeywords(kws);
       pendingTopic = kws;
+      pendingVisibility = 'private';
+      visPrivateBtn.classList.add('active'); visPublicBtn.classList.remove('active');
+      visHint.textContent = '비공개 — 방 코드를 아는 사람만 참여할 수 있어요.';
       showScreen('topic');
     }else{
       proceedToNicknameOrRoom();
@@ -1165,6 +1191,21 @@ function renderKeywords(kws){
     keywordRow.appendChild(chip);
   });
 }
+
+const visPublicBtn = $('visPublicBtn');
+const visPrivateBtn = $('visPrivateBtn');
+const visHint = $('visHint');
+
+visPublicBtn.addEventListener('click', () => {
+  pendingVisibility = 'public';
+  visPublicBtn.classList.add('active'); visPrivateBtn.classList.remove('active');
+  visHint.textContent = '공개 — 갤러리에 바로 노출돼요. 나중에 언제든 바꿀 수 있어요.';
+});
+visPrivateBtn.addEventListener('click', () => {
+  pendingVisibility = 'private';
+  visPrivateBtn.classList.add('active'); visPublicBtn.classList.remove('active');
+  visHint.textContent = '비공개 — 방 코드를 아는 사람만 참여할 수 있어요.';
+});
 
 rerollBtn.addEventListener('click', () => {
   const kws = rollKeywords();
@@ -1202,11 +1243,23 @@ async function finalizeEnterRoom(){
     if(pendingIsNew && pendingTopic){
       await db.ref('rooms/' + code + '/topic').set(pendingTopic);
       await db.ref('rooms/' + code + '/createdBy').set(currentNickname);
-      showToast('새 방이 만들어졌어요: ' + code);
+      if(pendingVisibility === 'public'){
+        await db.ref('public_stories/' + code).set({
+          roomCode: code, title: '(제목 없음)',
+          publishedAt: firebase.database.ServerValue.TIMESTAMP,
+          weekKey: getWeekKey(), topics: pendingTopic,
+          authors: [currentNickname], entryCount: 0,
+          thumbsUp: 0, publishedBy: currentNickname,
+          isCompleted: false, status: 'ongoing'
+        });
+        showToast('새 방이 공개됐어요: ' + code);
+      }else{
+        showToast('새 방이 만들어졌어요: ' + code);
+      }
     }
   }catch(e){
     console.error(e);
-    showToast('주제 저장에 실패했어요: ' + e.message);
+    showToast('저장에 실패했어요: ' + e.message);
   }
   enterRoom(code);
 }
@@ -1738,7 +1791,17 @@ visibilityToggleBtn.addEventListener('click', async () => {
 });
 
 /* ---------- 공지 ---------- */
-const NOTICE_ADMIN_PW = 'relay2026';
+const READER_ANIMALS = ['🦊','🐧','🐨','🦁','🐸','🦋','🐬','🦄','🐺','🦝','🐙','🦉','🐳','🦔','🐲','🦜','🐝','🦋','🐯','🦭'];
+
+function getReaderIdentity(){
+  let id = localStorage.getItem('relay-novel-reader-id');
+  if(!id){
+    const emoji = READER_ANIMALS[Math.floor(Math.random() * READER_ANIMALS.length)];
+    id = emoji + ' 독자';
+    localStorage.setItem('relay-novel-reader-id', id);
+  }
+  return id;
+}
 
 async function loadAnnouncement(){
   try{
@@ -2054,7 +2117,7 @@ async function openStoryReader(storyKey){
           ${comments.length === 0
             ? '<div class="pub-comment-empty">아직 댓글이 없어요. 첫 댓글을 남겨보세요!</div>'
             : comments.map(c=>{
-                const myNick = localStorage.getItem('relay-novel-public-nick') || currentNickname;
+                const myNick = getReaderIdentity();
                 const canDel = isAdmin || c.author === myNick;
                 return `<div class="pub-comment" data-comment-key="${c.key}">
                   <span class="pc-author">${escG(c.author||'익명')}</span>
@@ -2065,8 +2128,7 @@ async function openStoryReader(storyKey){
           }
         </div>
         <div class="pub-comment-input">
-          <input id="rCommentInput" placeholder="댓글 남기기..." maxlength="200">
-          <button id="rCommentBtn">등록</button>
+          <input id="rCommentInput" placeholder="댓글 남기기..." maxlength="200">          <button id="rCommentBtn">등록</button>
         </div>
       </div>
     </div>`;
@@ -2085,12 +2147,7 @@ async function openStoryReader(storyKey){
       rBtn.disabled = true;
       const text = rInput.value.trim();
       if(!text){ rBtn.disabled = false; return; }
-      let author = localStorage.getItem('relay-novel-public-nick');
-      if(!author){
-        author = prompt('댓글에 쓸 닉네임을 입력해주세요:');
-        if(!author){ rBtn.disabled = false; return; }
-        localStorage.setItem('relay-novel-public-nick', author);
-      }
+      const author = getReaderIdentity();
       try{
         await db.ref('public_comments/'+storyKey).push({
           author, text, ts: firebase.database.ServerValue.TIMESTAMP
@@ -2101,7 +2158,7 @@ async function openStoryReader(storyKey){
         const newVal = newSnap.val() || {};
         const newComments = Object.keys(newVal).map(k=>({key:k,...newVal[k]})).sort((a,b)=>(a.ts||0)-(b.ts||0));
         rList.innerHTML = newComments.map(c=>{
-          const myNick = localStorage.getItem('relay-novel-public-nick') || currentNickname;
+          const myNick = getReaderIdentity();
           const canDel = isAdmin || c.author === myNick;
           return `<div class="pub-comment" data-comment-key="${c.key}">
             <span class="pc-author">${escG(c.author||'익명')}</span>
@@ -2128,7 +2185,7 @@ async function openStoryReader(storyKey){
         const newSnap = await db.ref('public_comments/'+storyKey).once('value');
         const newVal = newSnap.val() || {};
         const newComments = Object.keys(newVal).map(k=>({key:k,...newVal[k]})).sort((a,b)=>(a.ts||0)-(b.ts||0));
-        const myNick = localStorage.getItem('relay-novel-public-nick') || currentNickname;
+        const myNick = getReaderIdentity();
         rList.innerHTML = newComments.length === 0
           ? '<div class="pub-comment-empty">아직 댓글이 없어요. 첫 댓글을 남겨보세요!</div>'
           : newComments.map(c=>{
