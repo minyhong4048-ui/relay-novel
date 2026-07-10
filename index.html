@@ -1965,7 +1965,7 @@ function renderPublicStories(){
       ? '<span style="font-size:11px;font-weight:700;color:#E07A1A;background:rgba(224,122,26,0.1);border-radius:999px;padding:2px 8px;">🔥 연재 중</span>'
       : '<span style="font-size:11px;font-weight:700;color:var(--thread);background:rgba(79,111,82,0.1);border-radius:999px;padding:2px 8px;">✨ 완결</span>';
     html += `<div class="story-card">
-      ${i<3 ? `<div class="story-rank-badge">${medals[i]}</div>` : ''}
+      ${i<3 && (s.thumbsUp||0) > 0 ? `<div class="story-rank-badge">${medals[i]}</div>` : ''}
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
         <div class="story-card-title">${escG(s.title)}</div>
         ${statusBadge}
