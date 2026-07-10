@@ -1987,6 +1987,7 @@ function renderPublicStories(){
   html += '</div>';
   publicSection.innerHTML = html;
   publicSection.querySelectorAll('.like-btn').forEach(btn => btn.addEventListener('click', () => thumbsUpStory(btn.dataset.key)));
+  publicSection.querySelectorAll('.comment-count-badge').forEach(btn => btn.addEventListener('click', () => openStoryReader(btn.dataset.key)));
   publicSection.querySelectorAll('.read-btn, .gold-read').forEach(btn => btn.addEventListener('click', () => openStoryReader(btn.dataset.key)));
   publicSection.querySelectorAll('.join-btn').forEach(btn => btn.addEventListener('click', () => joinFromGallery(btn.dataset.key)));
 }
